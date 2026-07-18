@@ -1,0 +1,41 @@
+name: Donate compute
+
+# Runs a Bull4Life donor node on a GitHub-hosted runner. It downloads the COMPILED node (no source)
+# and runs the project's own optimizer/hunter search for a bounded window. This is legit CI use:
+# scoped to the project's software, bounded per run, on a public repo (unlimited minutes).
+#
+# To donate: fork this repo, set a repo VARIABLE B4L_EMAIL = your bull4life.com login
+# (Settings -> Secrets and variables -> Actions -> Variables), then enable + run this workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Minutes to donate (max 330)'
+        default: '300'
+  schedule:
+    - cron: '0 4 * * *'   # once a day (bounded, ~5.5h) — the ToS-clean cadence
+
+concurrency:
+  group: donate
+  cancel-in-progress: false
+
+jobs:
+  donate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - name: Donate to the grid
+        env:
+          B4L_COORDINATOR: https://compute.bull4life.com
+          B4L_EMAIL: ${{ vars.B4L_EMAIL }}
+          B4L_NICKNAME: ${{ vars.B4L_NICKNAME }}
+          B4L_POWER: '100'
+        run: |
+          set -e
+          curl -fsSL https://github.com/dmanobela-glitch/bull4life-donate/releases/download/v1.7.0/b4l_node-linux -o b4l_node
+          chmod +x b4l_node
+          mins="${{ github.event.inputs.minutes || 300 }}"
+          echo "donating ~${mins} min as ${B4L_NICKNAME:-anon} (account: ${B4L_EMAIL:-unlinked})"
+          timeout $((mins * 60)) ./b4l_node --run || true
+          echo "donation window complete"
