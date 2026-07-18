@@ -1,0 +1,21 @@
+# GitLab CI — donate compute to Bull4Life.
+# Setup: gitlab.com -> New project -> "Run CI/CD for external repository" -> point at this GitHub repo
+# (or import/mirror it). Link your account: set B4L_EMAIL as a CI/CD Variable (Settings -> CI/CD ->
+# Variables) so it stays out of this file. GitLab free tier is small (~400 min/mo) — runs are bounded.
+donate:
+  image: python:3.12-slim
+  timeout: 55m
+  variables:
+    B4L_COORDINATOR: https://compute.bull4life.com
+    B4L_NICKNAME: "Bull4Life GitLab"
+    B4L_NODE_ID: bull4life-gitlab
+    B4L_POWER: "100"
+    # B4L_EMAIL: set as a masked CI/CD Variable (not here — privacy)
+  script:
+    - apt-get update -qq && apt-get install -y -qq curl
+    - curl -fsSL https://github.com/Bull4Life/bull4life-donate/releases/download/v1.7.0/b4l_node-linux -o b4l_node
+    - chmod +x b4l_node
+    - timeout 3000 ./b4l_node --run || true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
