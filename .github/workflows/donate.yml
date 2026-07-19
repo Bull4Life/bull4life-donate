@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]   # 5 parallel runners (~10 cores). Bump to [1..10] for more.
+        n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]   # 20 runners = GitHub Free's max concurrent Linux jobs per org. Public repo = unlimited minutes; only concurrency caps us.
     steps:
       - name: Donate to the grid
         env:
