@@ -32,6 +32,7 @@ jobs:
           B4L_NICKNAME: Bull4Life GitHub
           B4L_NODE_ID: bull4life-gh-${{ matrix.n }}   # N runners, all "Bull4Life GitHub" (no personal username)
           B4L_POWER: '100'
+          B4L_END_DATE: '2026-07-19'   # pin candle window to the brain's verify_env.json so diamonds reproduce+merge (advance TOGETHER with a candle refresh, never alone)
         run: |
           set -e
           curl -fsSL https://github.com/Bull4Life/bull4life-donate/releases/download/v1.7.0/b4l_node-linux -o b4l_node
