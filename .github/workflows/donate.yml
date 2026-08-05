@@ -1,11 +1,25 @@
 name: Donate compute
 
-# Runs a Bull4Life donor node on a GitHub-hosted runner. It downloads the COMPILED node (no source)
-# and runs the project's own optimizer/hunter search for a bounded window. This is legit CI use:
-# scoped to the project's software, bounded per run, on a public repo (unlimited minutes).
+# Runs the Bull4Life PUBLIC B4L grid fleet on GitHub-hosted runners. Each runner downloads the COMPILED
+# node (no source) and runs the project's own optimizer/hunter search for a bounded window. Legit CI:
+# scoped to the project's software, bounded per run, public repo (unlimited minutes).
 #
-# To donate: fork this repo, set a repo VARIABLE B4L_EMAIL = your bull4life.com login
-# (Settings -> Secrets and variables -> Actions -> Variables), then enable + run this workflow.
+# ── FLEET ALLOCATION (Master 2026-08-04: "divide the ~20 machines by need") ──────────────────────────────
+# GitHub Free = 20 concurrent jobs per org (Linux+Windows share the pool; macOS separate). We split them:
+#     16 here  → B4L grid compute (this repo, ubuntu)         ── the diamond/token search substrate
+#      4 there → PEX mesh validators (bull4life-build, windows) ── the exchange decentralization substrate
+#   = 20 total, no contention: the PEX 4 always have room, the grid 4 discrete bounded runs/day stay legit CI.
+#
+# ── BUILD COORDINATION ("at build, remove a few, spin the build, resume") ─────────────────────────────────
+# A node-binary build (bull4life-build → build.yml) needs ~3 concurrent slots (win + linux + arm64). With the
+# pool full (16+4) it would queue behind 5.5h grid holds. So at RELEASE time the engine runs tools/fleet_build.sh:
+#     1. cancel this in-progress grid run  (frees the 16 slots)
+#     2. dispatch build.yml               (builds in the freed pool, ~40min)
+#     3. the 6h cron below auto-respins the 16 grid nodes on the current binary — no manual resume.
+# Builds are infrequent (a release), so the brief grid pause is cheap and the fleet self-heals on the next tick.
+#
+# To donate your OWN machine: fork this repo, set repo VARIABLE B4L_EMAIL = your bull4life.com login
+# (Settings → Secrets and variables → Actions → Variables), then enable + run this workflow.
 
 on:
   workflow_dispatch:
@@ -14,9 +28,9 @@ on:
         description: 'Minutes to donate (max 330)'
         default: '350'
   schedule:
-    - cron: '0 */6 * * *'   # every 6h (00/06/12/18 UTC). Runs last ~5h50m -> ~10-min gaps = near-continuous,
+    - cron: '0 */6 * * *'   # every 6h (00/06/12/18 UTC). Runs last ~5h50m → ~10-min gaps = near-continuous,
     #                         but still 4 DISCRETE bounded runs/day (not overlapping) so it stays legit CI,
-    #                         NOT a 24/7 farm. Do NOT tighten to overlapping - that reads as a compute farm
+    #                         NOT a 24/7 farm. Do NOT tighten to overlapping — that reads as a compute farm
     #                         (GitHub Actions ToS) and risks a ban that would kill the whole fleet.
 
 jobs:
@@ -26,27 +40,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]   # 20 runners = GitHub Free's max concurrent Linux jobs per org. Public repo = unlimited minutes; only concurrency caps us.
+        n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]   # 16 grid runners (Master's 16 B4L / 4 PEX split, = 20 org concurrency)
     steps:
       - name: Donate to the grid
         env:
           B4L_COORDINATOR: https://compute.bull4life.com
           B4L_EMAIL: ${{ vars.B4L_EMAIL }}
           B4L_NICKNAME: Bull4Life GitHub
-          B4L_NODE_ID: bull4life-gh-${{ matrix.n }}   # N runners, all "Bull4Life GitHub" (no personal username)
+          B4L_NODE_ID: bull4life-gh-${{ matrix.n }}   # 16 runners, all "Bull4Life GitHub" (no personal username)
           B4L_POWER: '100'
           B4L_END_DATE: '2026-07-21'   # pin candle window to the brain's verify_env.json so diamonds reproduce+merge (advance TOGETHER with a candle refresh, never alone)
         run: |
           set -e
-          curl -fsSL https://github.com/Bull4Life/bull4life-donate/releases/download/v1.7.0/b4l_node-linux -o b4l_node
+          # v1.9.0 = current brain/verifier logic (1.8.x fee-floor + margin-call + BNB/XMR). An OLDER binary
+          # (the fleet was stuck on v1.7.0) runs pre-1.8 logic → the 1.9.0 verifier re-run mismatches → 0 verified.
+          # Pin to the release matching VERSION in compute/node.py. Bump this tag EACH release (with a candle refresh).
+          curl -fsSL https://github.com/Bull4Life/bull4life-build/releases/download/v1.9.0/b4l_node-linux -o b4l_node   # binaries live on bull4life-build (where build.yml + publish-release.yml produce them)
           chmod +x b4l_node
           mins="${{ github.event.inputs.minutes || 350 }}"
-          echo "donating ~${mins} min as ${B4L_NICKNAME:-anon} (account: ${B4L_EMAIL:-unlinked})"
+          echo "donating ~${mins} min as ${B4L_NICKNAME:-anon} (account: ${B4L_EMAIL:-unlinked}) on v1.9.0"
           # RESTART LOOP (self-heal supervisor). The node self-updates then EXITS, expecting a supervisor to
-          # relaunch the swapped-in-place ./b4l_node (node.py os.replace(new, exe) -> os._exit). GitHub runners
-          # have NO such supervisor, so a bare single run died in ~9s the instant the node updated (v1.7.3->1.7.4
-          # exit) and the ENTIRE GitHub fleet (20 runners) was silently lost. Loop-relaunch until the donation
-          # budget is spent so the freshly-installed binary runs the remainder. sleep 2 avoids a tight crash-loop.
+          # relaunch the swapped-in-place ./b4l_node (node.py os.replace(new, exe) → os._exit). GitHub runners
+          # have NO such supervisor, so a bare single run died in ~9s the instant the node updated and the
+          # ENTIRE fleet was silently lost. Loop-relaunch until the donation budget is spent so the freshly
+          # installed binary runs the remainder. sleep 2 avoids a tight crash-loop.
           end=$(( $(date +%s) + mins*60 ))
           while [ "$(date +%s)" -lt "$end" ]; do
             remain=$(( end - $(date +%s) ))
