@@ -5,10 +5,15 @@ name: Donate compute
 # scoped to the project's software, bounded per run, public repo (unlimited minutes).
 #
 # ── FLEET ALLOCATION (Master 2026-08-04: "divide the ~20 machines by need") ──────────────────────────────
-# GitHub Free = 20 concurrent jobs per org (Linux+Windows share the pool; macOS separate). We split them:
-#     16 here  → B4L grid compute (this repo, ubuntu)         ── the diamond/token search substrate
+# GitHub Free = 20 concurrent jobs per org (public + PRIVATE share ONE pool). We split them, leaving headroom:
+#     14 here  → B4L grid compute (this repo, ubuntu)          ── the diamond/token search substrate
 #      4 there → PEX mesh validators (bull4life-build, windows) ── the exchange decentralization substrate
-#   = 20 total, no contention: the PEX 4 always have room, the grid 4 discrete bounded runs/day stay legit CI.
+#      1 held  → the verify-pool BRAIN (bull4life-engine, private) ── verifies pooled diamonds → credits → mint
+#      1 spare → occasional PEX test-node / build slack
+#   = 20 cap. CRITICAL: 16 grid saturated the pool and STARVED the verify brain (it queued behind 5.5h holds →
+#     diamonds pooled but never verified → no tokens). The brain is the token pipeline's critical path, so the
+#     grid caps at 14 to always leave it a slot. (Proper long-term fix: move the verify brain onto the server so
+#     it never competes for the GitHub pool + can verify continuously — see [[master-laptop-offload]].)
 #
 # ── BUILD COORDINATION ("at build, remove a few, spin the build, resume") ─────────────────────────────────
 # A node-binary build (bull4life-build → build.yml) needs ~3 concurrent slots (win + linux + arm64). With the
@@ -40,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]   # 16 grid runners (Master's 16 B4L / 4 PEX split, = 20 org concurrency)
+        n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]   # 14 grid runners: 14 + 4 PEX + 1 verify-brain + 1 spare = 20 org cap (16 starved the brain)
     steps:
       - name: Donate to the grid
         env:
