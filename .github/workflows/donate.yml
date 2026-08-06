@@ -57,6 +57,21 @@ jobs:
           B4L_END_DATE: '2026-07-21'   # pin candle window to the brain's verify_env.json so diamonds reproduce+merge (advance TOGETHER with a candle refresh, never alone)
         run: |
           set -e
+          # ── PEX-LITE CO-NODE (Master + Cludia 0604: "run BOTH the b4l node AND the pex-lite node on every spin")
+          #    Every grid runner ALSO spins the ~23 MB pex-lite light node (header-only mesh follower + VRF
+          #    committee worker + peer-recompute-ratify). FULLY ISOLATED so it can NEVER fail or slow the grid
+          #    node below (the token pipeline's critical path): a `set +e` subshell, curl --max-time capped so it
+          #    can't hang the grid start, nohup-backgrounded so it lives for the run + dies with it, mem-capped,
+          #    UNIQUE per-runner PEX_NODE_NAME so the VRF election sees distinct participants. stdlib-only, no pip.
+          ( set +e
+            if curl -fsSL --max-time 60 https://compute.bull4life.com/download/pex-node.tar.gz -o pex-node.tar.gz                && mkdir -p pexlite && tar xzf pex-node.tar.gz -C pexlite; then
+              ( cd pexlite                 && PEX_NODE_NAME="github-${{ github.run_id }}-${{ matrix.n }}" PEX_LITE_MEM_MB=256                    PEX_JOIN_URL=https://compute.bull4life.com                    nohup python3 -m node.pex_lite > /tmp/pexlite-${{ matrix.n }}.log 2>&1 & )
+              echo "[pex-lite] spun github-${{ github.run_id }}-${{ matrix.n }}"
+            else
+              echo "[pex-lite] bundle fetch/extract failed (non-fatal, grid node unaffected)"
+            fi
+          ) || echo "[pex-lite] bootstrap skipped (non-fatal, grid node unaffected)"
+          # ── B4L GRID NODE (unchanged below) ──
           # v1.9.0 = current brain/verifier logic (1.8.x fee-floor + margin-call + BNB/XMR). An OLDER binary
           # (the fleet was stuck on v1.7.0) runs pre-1.8 logic → the 1.9.0 verifier re-run mismatches → 0 verified.
           # Pin to the release matching VERSION in compute/node.py. Bump this tag EACH release (with a candle refresh).
