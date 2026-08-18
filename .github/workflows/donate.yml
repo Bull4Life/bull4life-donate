@@ -72,13 +72,13 @@ jobs:
             fi
           ) || echo "[pex-lite] bootstrap skipped (non-fatal, grid node unaffected)"
           # ── B4L GRID NODE (unchanged below) ──
-          # v1.9.7 = current logic (sweep ROOT-align + seed-wire) (1.8.x fee-floor + margin-call + BNB/XMR). An OLDER binary
+          # v1.11.0 = current logic (mc_e3 money-layer validators — REQUIRED to verify wrap/unwrap blocks h28+, else fork). An OLDER binary
           # (the fleet was stuck on v1.7.0) runs pre-1.8 logic → the 1.9.0 verifier re-run mismatches → 0 verified.
           # Pin to the release matching VERSION in compute/node.py. Bump this tag EACH release (with a candle refresh).
-          curl -fsSL https://github.com/dmanobela-glitch/b4l-mint/releases/download/v1.9.7/b4l_node-linux -o b4l_node   # binaries live on bull4life-build (where build.yml + publish-release.yml produce them)
+          curl -fsSL https://github.com/dmanobela-glitch/b4l-mint/releases/download/v1.11.0/b4l_node-linux -o b4l_node   # binaries live on bull4life-build (where build.yml + publish-release.yml produce them)
           chmod +x b4l_node
           mins="${{ github.event.inputs.minutes || 350 }}"
-          echo "donating ~${mins} min as ${B4L_NICKNAME:-anon} (account: ${B4L_EMAIL:-unlinked}) on v1.9.5"
+          echo "donating ~${mins} min as ${B4L_NICKNAME:-anon} (account: ${B4L_EMAIL:-unlinked}) on v1.11.0"
           # RESTART LOOP (self-heal supervisor). The node self-updates then EXITS, expecting a supervisor to
           # relaunch the swapped-in-place ./b4l_node (node.py os.replace(new, exe) → os._exit). GitHub runners
           # have NO such supervisor, so a bare single run died in ~9s the instant the node updated and the
