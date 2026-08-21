@@ -15,6 +15,14 @@ name: Donate compute
 #     grid caps at 14 to always leave it a slot. (Proper long-term fix: move the verify brain onto the server so
 #     it never competes for the GitHub pool + can verify continuously — see [[master-laptop-offload]].)
 #
+# ── 7B-ARMY INFERENCE LANE (MASTER GO 2026-08-21: "B4L_INFER=1 on ALL 14 runners — full GO") ─────────────
+# Node v1.13.0 carries the fleet-inference lane: with B4L_INFER=1 each runner claims coordinator
+# /inference/* jobs BEFORE the classic grid (empty/gated → real idle-fallback to hunt/optimize, unchanged).
+# The worker needs llama-cli (installed below, b10545 pin) + the model GGUF (downloaded ONCE into
+# ~/.bull4life/models, restored per-run by the actions/cache step → "add the cache for the GGUF").
+# The model URL+SHA256 MUST live in the worker env: the coordinator stamps only the model NAME on jobs
+# (the deploy pin mirrors the same values in the live coordinator infer.conf).
+#
 # ── BUILD COORDINATION ("at build, remove a few, spin the build, resume") ─────────────────────────────────
 # A node-binary build (bull4life-build → build.yml) needs ~3 concurrent slots (win + linux + arm64). With the
 # pool full (16+4) it would queue behind 5.5h grid holds. So at RELEASE time the engine runs tools/fleet_build.sh:
@@ -46,7 +54,33 @@ jobs:
       fail-fast: false
       matrix:
         n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]   # 14 grid runners: 14 + 4 PEX + 1 verify-brain + 1 spare = 20 org cap (16 starved the brain)
+    env:
+      # 7B-ARMY inference lane — MASTER GO: B4L_INFER=1 on ALL 14 runners (full GO 2026-08-21).
+      # Model pin mirrors the live coordinator infer.conf (7B now; the 13-14B flagship replaces it ONLY
+      # after the Slice-6 bench verdict + Master OK — cache key rotates with the sha automatically).
+      B4L_INFER: '1'
+      B4L_INFER_MODEL_NAME: qwen2.5-coder-7b-instruct-q4_k_m.gguf
+      B4L_INFER_MODEL_URL: https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf
+      B4L_INFER_MODEL_SHA256: 509287f78cb4d4cf6b3843734733b914b2c158e43e22a7f4bf5e963800894d3c
     steps:
+      - name: Restore model GGUF cache (download once, restore fast)
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.bull4life/models   # frozen node ROOT = ~/.bull4life (model dir)
+          key: gguf-infer-${{ env.B4L_INFER_MODEL_SHA256 }}
+      - name: Install llama.cpp runtime (CPU, b10545 pin — inference lane)
+        run: |
+          set -e
+          # tag is POSITIONAL on this gh CLI; never rely on 'latest' (v0.2.0 = asset-less, G20 lesson)
+          gh release download b10545 --repo ggml-org/llama.cpp --pattern 'llama-*-bin-ubuntu-x64.tar.gz' --dir dl
+          mkdir -p llama && tar -xzf dl/*.tar.gz -C llama
+          CLI=$(find llama -name 'llama-cli' -type f | head -1)
+          test -n "$CLI" || { echo "FAIL: no llama-cli in release"; exit 1; }
+          chmod +x "$CLI"
+          echo "B4L_LLAMA_CLI=$CLI" >> $GITHUB_ENV
+          echo "B4L_LLAMA_DIR=$(dirname "$CLI")" >> $GITHUB_ENV
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Donate to the grid
         env:
           B4L_COORDINATOR: https://compute.bull4life.com
@@ -57,6 +91,7 @@ jobs:
           B4L_END_DATE: '2026-07-21'   # pin candle window to the brain's verify_env.json so diamonds reproduce+merge (advance TOGETHER with a candle refresh, never alone)
         run: |
           set -e
+          export LD_LIBRARY_PATH="${B4L_LLAMA_DIR:-}:${LD_LIBRARY_PATH:-}"   # llama-cli needs its libs dir
           # ── PEX-LITE CO-NODE (Master + Cludia 0604: "run BOTH the b4l node AND the pex-lite node on every spin")
           #    Every grid runner ALSO spins the ~23 MB pex-lite light node (header-only mesh follower + VRF
           #    committee worker + peer-recompute-ratify). FULLY ISOLATED so it can NEVER fail or slow the grid
@@ -71,14 +106,15 @@ jobs:
               echo "[pex-lite] bundle fetch/extract failed (non-fatal, grid node unaffected)"
             fi
           ) || echo "[pex-lite] bootstrap skipped (non-fatal, grid node unaffected)"
-          # ── B4L GRID NODE (unchanged below) ──
-          # v1.12.0 = current logic (mc_e5 subscription-billing validators + mc_e3 money-layer — REQUIRED to verify wrap/unwrap blocks h28+, else fork). An OLDER binary
-          # (the fleet was stuck on v1.7.0) runs pre-1.8 logic → the 1.9.0 verifier re-run mismatches → 0 verified.
+          # ── B4L GRID NODE ──
+          # v1.13.0 = current logic (7B-ARMY inference lane — B4L_INFER=1 claims /inference/* before the grid
+          # + mc_e5 subscription-billing validators + mc_e3 money-layer REQUIRED to verify wrap/unwrap blocks
+          # h28+, else fork). An OLDER binary runs pre-1.8 logic → the 1.9.0 verifier re-run mismatches → 0 verified.
           # Pin to the release matching VERSION in compute/node.py. Bump this tag EACH release (with a candle refresh).
-          curl -fsSL https://github.com/dmanobela-glitch/b4l-mint/releases/download/v1.12.0/b4l_node-linux -o b4l_node   # binaries live on bull4life-build (where build.yml + publish-release.yml produce them)
+          curl -fsSL https://github.com/dmanobela-glitch/b4l-mint/releases/download/v1.13.0/b4l_node-linux -o b4l_node   # binaries live on bull4life-build (where build.yml + publish-release.yml produce them)
           chmod +x b4l_node
           mins="${{ github.event.inputs.minutes || 350 }}"
-          echo "donating ~${mins} min as ${B4L_NICKNAME:-anon} (account: ${B4L_EMAIL:-unlinked}) on v1.12.0"
+          echo "donating ~${mins} min as ${B4L_NICKNAME:-anon} (account: ${B4L_EMAIL:-unlinked}) on v1.13.0 (B4L_INFER=1)"
           # RESTART LOOP (self-heal supervisor). The node self-updates then EXITS, expecting a supervisor to
           # relaunch the swapped-in-place ./b4l_node (node.py os.replace(new, exe) → os._exit). GitHub runners
           # have NO such supervisor, so a bare single run died in ~9s the instant the node updated and the
