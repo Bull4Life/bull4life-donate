@@ -16,7 +16,7 @@ name: Donate compute
 #     it never competes for the GitHub pool + can verify continuously — see [[master-laptop-offload]].)
 #
 # ── 7B-ARMY INFERENCE LANE (MASTER GO 2026-08-21: "B4L_INFER=1 on ALL 14 runners — full GO") ─────────────
-# Node v1.13.0 carries the fleet-inference lane: with B4L_INFER=1 each runner claims coordinator
+# Node v1.15.0 carries the fleet-inference lane: with B4L_INFER=1 each runner claims coordinator
 # /inference/* jobs BEFORE the classic grid (empty/gated → real idle-fallback to hunt/optimize, unchanged).
 # The worker needs llama-cli (installed below, b10545 pin) + the model GGUF (downloaded ONCE into
 # ~/.bull4life/models, restored per-run by the actions/cache step → "add the cache for the GGUF").
@@ -109,14 +109,14 @@ jobs:
             fi
           ) || echo "[pex-lite] bootstrap skipped (non-fatal, grid node unaffected)"
           # ── B4L GRID NODE ──
-          # v1.13.0 = current logic (7B-ARMY inference lane — B4L_INFER=1 claims /inference/* before the grid
+          # v1.15.0 = current logic (7B-ARMY inference lane — B4L_INFER=1 claims /inference/* before the grid
           # + mc_e5 subscription-billing validators + mc_e3 money-layer REQUIRED to verify wrap/unwrap blocks
           # h28+, else fork). An OLDER binary runs pre-1.8 logic → the 1.9.0 verifier re-run mismatches → 0 verified.
           # Pin to the release matching VERSION in compute/node.py. Bump this tag EACH release (with a candle refresh).
-          curl -fsSL https://github.com/dmanobela-glitch/b4l-mint/releases/download/v1.13.0/b4l_node-linux -o b4l_node   # binaries live on bull4life-build (where build.yml + publish-release.yml produce them)
+          curl -fsSL https://github.com/dmanobela-glitch/b4l-mint/releases/download/v1.15.0/b4l_node-linux -o b4l_node   # binaries live on bull4life-build (where build.yml + publish-release.yml produce them)
           chmod +x b4l_node
           mins="${{ github.event.inputs.minutes || 350 }}"
-          echo "donating ~${mins} min as ${B4L_NICKNAME:-anon} (account: ${B4L_EMAIL:-unlinked}) on v1.13.0 (B4L_INFER=1)"
+          echo "donating ~${mins} min as ${B4L_NICKNAME:-anon} (account: ${B4L_EMAIL:-unlinked}) on v1.15.0 (B4L_INFER=1)"
           # RESTART LOOP (self-heal supervisor). The node self-updates then EXITS, expecting a supervisor to
           # relaunch the swapped-in-place ./b4l_node (node.py os.replace(new, exe) → os._exit). GitHub runners
           # have NO such supervisor, so a bare single run died in ~9s the instant the node updated and the
