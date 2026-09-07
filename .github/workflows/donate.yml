@@ -40,6 +40,10 @@ on:
     #                         NOT a 24/7 farm. Do NOT tighten to overlapping — that reads as a compute farm
     #                         (GitHub Actions ToS) and risks a ban that would kill the whole fleet.
 
+concurrency:
+  group: donate-window
+  cancel-in-progress: false
+
 permissions:
   actions: write
   contents: read
